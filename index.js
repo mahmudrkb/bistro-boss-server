@@ -1,10 +1,12 @@
 const express = require("express");
+// import { PaymentIntents } from './node_modules/stripe/esm/resources/PaymentIntents';
 const app = express();
 const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const cors = require("cors");
 require("dotenv").config();
+const stripe=require('stripe')(process.env.STRIPE_SECRET_KEY)
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -45,7 +47,7 @@ async function run() {
     // middleware
 
     const verifyToken = (req, res, next) => {
-      console.log("inside verify token ", req.headers.authorization);
+      // console.log("inside verify token ", req.headers.authorization);
       if (!req.headers.authorization) {
         return res.status(401).send({ message: "forbidden  access" });
       }
@@ -75,7 +77,7 @@ async function run() {
 
     // user api
     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
-      console.log(req.headers);
+      // console.log(req.headers);
       const result = await userCollection.find().toArray();
       res.send(result);
     });
@@ -143,20 +145,29 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/menu/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id) };
+      const result = await menuCollection.findOne(query);
+      res.send(result);
+    });
+
     app.post("/menu", async (req, res) => {
       const item = req.body;
       const result = await menuCollection.insertOne(item);
       res.send(result);
     });
 
-    app.delete('/menu/:id',verifyToken,verifyAdmin, async(req,res)=>{
-      const id=req.params.id 
-      const query={_id: new ObjectId(id)}
-      const result= await menuCollection.deleteOne(query)
-      res.send(result)
-    })
+   
 
-    app.get("/reviews", verifyToken, verifyAdmin, async (req, res) => {
+    app.delete("/menu/:id", verifyToken, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await menuCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    app.get("/reviews", async (req, res) => {
       const result = await reviewCollection.find().toArray();
       res.send(result);
     });
@@ -178,6 +189,22 @@ async function run() {
       const result = await cartCollection.deleteOne(query);
       res.send(result);
     });
+
+
+    // payment intent
+
+    app.post('/create-payment-intent',async(req,res)=>{
+      const {price}=req.body 
+      const amount=parseInt(price*100)
+      const paymentIntent= await stripe.paymentIntents.create({
+        amount:amount,
+        currency:'usd',
+        payment_method_types:['card']
+      })
+      res.send({
+        clientSecret: paymentIntent.client_secret
+      })
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
